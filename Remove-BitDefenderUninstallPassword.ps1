@@ -1,7 +1,7 @@
 # Create Admin User
 $adminUsername = "RunOnceAdmin" 
 $adminPassword = ConvertTo-SecureString -String "PleaseGoAwayBD!" -AsPlainText -Force #change this in Auto Login section below also
-$adminUserDescription = "Temporary Administrator account for removing BitDefender password in Safe Mode"
+$adminUserDescription = "temporary BitDefender password removal admin"
 New-LocalUser -Name $adminUsername -Password $adminPassword -AccountNeverExpires -UserMayNotChangePassword -Description $adminUserDescription -Verbose
 Add-LocalGroupMember -Group Administrators -Member $adminUsername -Verbose
 
