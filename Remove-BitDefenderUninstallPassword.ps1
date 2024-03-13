@@ -1,3 +1,6 @@
+# Get last login user 
+$lastLoginUser = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI" -Name "LastLoggedOnUser").LastLoggedOnUser
+
 # Create Admin User
 $adminUsername = "RunOnceAdmin" 
 $adminPassword = ConvertTo-SecureString -String "PleaseGoAwayBD!" -AsPlainText -Force #change this in Auto Login section below also
@@ -16,33 +19,43 @@ Set-ItemProperty -Path $regPath -Name $regValueName1 -Value "1" -Verbose
 Set-ItemProperty -Path $regPath -Name $regValueName2 -Value $autoLogonUsername -Verbose
 Set-ItemProperty -Path $regPath -Name $regValueName3 -Value $autoLogonPassword -Verbose
 
-# Create script to run from within safe mode
+# Set file paths
+$SafeModeScriptPath = "C:\nexigen\SafeModeScript.cmd" #runs in Safe Mode
+$CleanupScriptPath = "C:\nexigen\CleanupScript.cmd" #runs in Normal Mode
+$BitDefenderUninstallPath = "C:\nexigen\BEST_uninstallTool.exe"
+
+# Create safe mode script (runs first)
 $SafeModeScript = @"
 REG add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Endpoint Security" /v Key /d "" /f
-REG DELETE "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoAdminLogon /f
-REG DELETE "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultUserName /f
-REG DELETE "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultPassword /f
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" /v CleanupScript /d "C:\testAdmin\cleanupscript.cmd" /f
 bcdedit /deletevalue "{default}" safeboot
 shutdown.exe /r /t 00
 "@
-$SafeModeScriptPath = "C:\nexigen\SafeModeScript.cmd"
 New-Item $SafeModeScriptPath -Force
 Set-Content $SafeModeScriptPath -value $SafeModeScript
-Set-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce" -Name 'RunOnceScript' -Value "$SafeModeScriptPath"
+Set-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce" -Name '*RunOnceScript' -Value "$SafeModeScriptPath"
 
-# Create script to do cleanup after exiting safe mode
+# Create normal mode script (runs on normal mode)
 $CleanupScript = @"
+REG DELETE "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoAdminLogon /f
+REG DELETE "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultUserName /f
+REG DELETE "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultPassword /f
+REG DELETE "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" /v CleanupScript /f
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI" /v LastLoggedOnUser /d "$lastLoginUser" /f
 NET LOCALGROUP Administrators /delete $adminUsername 
 NET USER $adminUsername /delete
-C:\nexigen\BEST_Uninstall_tool.exe /bdparams /bruteForce /noWait
+$BitDefenderUninstallPath /bdparams /bruteForce /noWait
 "@
-$CleanupScriptPath = "C:\nexigen\CleanupScript.cmd"
 New-Item $CleanupScriptPath -Force
 Set-Content $CleanupScriptPath -value $CleanupScript
+
+# Download BitDefender uninstall tool and save it locally. 
+# https://download.bitdefender.com/SMB/Hydra/release/bst_win/uninstallTool/BEST_uninstallTool.exe
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Invoke-WebRequest -Uri "https://download.bitdefender.com/SMB/Hydra/release/bst_win/uninstallTool/BEST_uninstallTool.exe" -OutFile "$BitDefenderUninstallPath"
 
 # Restart into Safe Mode
 bcdedit /set "{current}" safeboot network
 Start-Sleep -Seconds 10
 Restart-Computer -Force
 
-# Run cleanup script after exiting safe mode. 
