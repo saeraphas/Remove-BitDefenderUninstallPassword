@@ -26,8 +26,9 @@ $BitDefenderUninstallPath = "C:\nexigen\BEST_uninstallTool.exe"
 
 # Create safe mode script (runs first)
 $SafeModeScript = @"
-REG add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Endpoint Security" /v Key /d "" /f
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" /v CleanupScript /d "C:\testAdmin\cleanupscript.cmd" /f
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Endpoint Security" /v Key /d "" /f
+REG DELETE "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" /v "*RunOnceScript" /f
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" /v "CleanupScript" /d "$CleanupScriptPath" /f
 bcdedit /deletevalue "{default}" safeboot
 shutdown.exe /r /t 00
 "@
@@ -40,10 +41,8 @@ $CleanupScript = @"
 REG DELETE "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoAdminLogon /f
 REG DELETE "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultUserName /f
 REG DELETE "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultPassword /f
-REG DELETE "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" /v CleanupScript /f
+REG DELETE "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" /v "CleanupScript" /f
 REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI" /v LastLoggedOnUser /d "$lastLoginUser" /f
-NET LOCALGROUP Administrators /delete $adminUsername 
-NET USER $adminUsername /delete
 $BitDefenderUninstallPath /bdparams /bruteForce /noWait
 "@
 New-Item $CleanupScriptPath -Force
@@ -54,8 +53,18 @@ Set-Content $CleanupScriptPath -value $CleanupScript
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Invoke-WebRequest -Uri "https://download.bitdefender.com/SMB/Hydra/release/bst_win/uninstallTool/BEST_uninstallTool.exe" -OutFile "$BitDefenderUninstallPath"
 
-# Restart into Safe Mode
-bcdedit /set "{current}" safeboot network
-Start-Sleep -Seconds 10
-Restart-Computer -Force
+if (Test-Path -Path $BitDefenderUninstallPath) {
+    # Restart into Safe Mode
+    Write-Warning "BitDefender uninstall tool found at $BitDefenderUninstallPath. Restarting into Safe Mode with Networking. Please do not interrupt."
+    bcdedit /set "{current}" safeboot network
+    Start-Sleep -Seconds 10
+    Restart-Computer -Force
+}
+else {
+    # Print error and exit
+    Write-Warning "BitDefender uninstall tool not found at $BitDefenderUninstallPath. Please copy the file and try again."
+}
 
+# These should be run manually once removal is complete to remove the temp admin account. 
+#NET LOCALGROUP Administrators /delete $adminUsername 
+#NET USER $adminUsername /delete
