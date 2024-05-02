@@ -43,6 +43,7 @@ REG DELETE "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v Defau
 REG DELETE "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultPassword /f
 REG DELETE "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" /v "CleanupScript" /f
 REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI" /v LastLoggedOnUser /d "$lastLoginUser" /f
+SCHTASKS /create /tn "Remove Temporary BitDefender Admin" /tr "NET USER $adminUsername /DELETE" /sc ONSTART
 $BitDefenderUninstallPath /bdparams /bruteForce /noWait
 "@
 New-Item $CleanupScriptPath -Force
